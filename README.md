@@ -1,1 +1,1 @@
-# Julian_UROPUROP Projects for Szolovits Lab
+# UROP Projects for Szolovits Lab
