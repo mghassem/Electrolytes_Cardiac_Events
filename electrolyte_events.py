@@ -114,6 +114,117 @@ def make_spell_check_dictionary():
 
 	return misspelled_dictionary 
 
+
+#takes in the desired electrolyte
+#takes in icustay_id of desired patient
+#returns an ordered list of all serium draw timestamps from that patient's icu stay
+def get_date_range(electrolyte, icustay_id):
+	icustay_id_column = 0
+	charttime_column = 1
+	valuenum_column = 2
+	itemid_column = 3
+	list_of_timestamps = []
+	filename = electrolyte + "_final.csv"
+	with open(filename, 'rb') as f:
+		reader = csv.reader(f)
+		for row in reader:
+			if row[icustay_id_column]==str(icustay_id):
+				timestamp_of_reading = pd.Timestamp(row[charttime_column])
+				if len(list_of_timestamps) == 0:
+					list_of_timestamps.append(timestamp_of_reading)
+					set_of_timestamps = Set([timestamp_of_reading])
+				else:
+					if timestamp_of_reading not in set_of_timestamps:
+						list_of_timestamps = binary_search_insertion(list_of_timestamps, timestamp_of_reading)
+						set_of_timestamps.add(timestamp_of_reading)
+	return list_of_timestamps
+
+
+#takes in list of serum draw timestamps 
+#takes in a timestamp to insert into the list of timestamps
+#utilizes binary search to find correct index, inserts timestamp into list of timestamps
+#returns mutated list
+def binary_search_insertion(list_of_timestamps, timestamp_of_reading):
+	lower_bound = 0
+	upper_bound = len(list_of_timestamps)
+	if timestamp_of_reading < list_of_timestamps[lower_bound]:
+		list_of_timestamps.insert(0, timestamp_of_reading)
+		return list_of_timestamps
+	elif timestamp_of_reading > list_of_timestamps[upper_bound]:
+		list_of_timestamps.append(timestamp_of_reading)
+		return list_of_timestamps
+	else:
+		while upper_bound - lower_bound > 1:
+			middle_bound = math.floor((upper_bound+lower_bound)*1.0/2)
+			if timestamp_of_reading > list_of_timestamps[middle_bound]:
+				lower_bound = middle_bound
+			elif timestamp_of_reading < list_of_timestamps[middle_bound]:
+				upper_bound = middle_bound
+		list_of_timestamps.insert(upper_bound, timestamp_of_reading)
+	return list_of_timestamps
+
+
+
+#takes in icustay_id of desired patient
+#takes in a desired date to check for anti-arrhythmia drug and lasix administration between 12-3am
+#returns boolean, whether or not the patient received lasix or anti-arrhythmia drugs between 12-3am
+def lasix_aadrug_administration(icustay_id, date):
+	icustay_id_column = 0
+	itemid_column = 1
+	charttime_column = 2
+	valuenum_column = 3
+	with open('complete_drug_table_final.csv', 'rb') as f:
+		reader = csv.reader(f)
+		for row in reader:
+			if row[icustay_id_column] == str(icustay_id):
+				time_of_drug_admin = pd.Timestamp(row[charttime_column])
+				if time_of_drug_admin.date()==date and (datetime.time(0) < time_of_drug_admin.time() < datetime.time(3)):
+					return True 
+	return False
+
+#takes in the desired electrolyte
+#takes in the desired date to check
+#takes in the desired icu_id of a patient
+#returns boolean, whether or not that patient had a serum draw on that day between 12-3 am
+def invalidating_serum_measurement(electrolyte, icustay_id, date):
+	icustay_id_column = 0
+	charttime_column = 1
+	valunum_column = 2
+	itemid_column = 3
+	filename = electrolyte + "_final.csv"
+	with open(filename, 'rb') as f:
+		reader = csv.reader(f)
+		for row in reader:
+			if row[icustay_id_column]==str(icustay_id):
+				timestamp_of_reading = pd.Timestamp(row[charttime_column])
+				if timestamp_of_reading.date() == date and (datetime.time(0) < timestamp_of_reading.time() < datetime.time(3)):
+					return True
+	return False
+
+
+#takes in the desired electrolyte
+#takes in the desired date to check
+#takes in the desired icu_id of a patient
+#returns boolean, whether or not that patient received only one serum measurement between 3-5am
+def sole_valid_measurement(electrolyte, icustay_id, date):
+	icustay_id_column = 0
+	charttime_column = 1
+	valunum_column = 2
+	itemid_column = 3
+	list_of_timestamps = []
+	filename = electrolyte + "_final.csv"
+	with open(filename, 'rb') as f:
+		reader = csv.reader(f)
+		for row in reader:
+			if row[icustay_id_column]==str(icustay_id):
+				timestamp_of_reading = pd.Timestamp(row[charttime_column])
+				if timestamp_of_reading.date() == date and (datetime.time(3) < timestamp_of_reading.time() < datetime.time(5)):
+					list_of_timestamps.append(timestamp_of_reading)
+	if len(list_of_timestamps) != 1:
+		return False
+	return list_of_timestamps[0]
+
+
 #takes in the icustay_id of a patient
 #takes in the desired date of nurse's note (in pd.Timestamp.date()) format
 #return the nurse's note for the designated patient on the designated day as a string
@@ -186,114 +297,7 @@ def anti_arrhythmia_drug_event(icustay_id, date):
 						return True 
 	return False
 
-#takes in the desired electrolyte
-#takes in the desired date to check
-#takes in the desired icu_id of a patient
-#returns boolean, whether or not that patient had a serum draw on that day between 12-3 am
-def invalidating_serum_measurement(electrolyte, icustay_id, date):
-	icustay_id_column = 0
-	charttime_column = 1
-	valunum_column = 2
-	itemid_column = 3
-	filename = electrolyte + "_final.csv"
-	with open(filename, 'rb') as f:
-		reader = csv.reader(f)
-		for row in reader:
-			if row[icustay_id_column]==str(icustay_id):
-				timestamp_of_reading = pd.Timestamp(row[charttime_column])
-				if timestamp_of_reading.date() == date and (datetime.time(0) < timestamp_of_reading.time() < datetime.time(3)):
-					return True
-	return False
 
-#takes in the desired electrolyte
-#takes in the desired date to check
-#takes in the desired icu_id of a patient
-#returns boolean, whether or not that patient received only one serum measurement between 3-5am
-def sole_valid_measurement(electrolyte, icustay_id, date):
-	icustay_id_column = 0
-	charttime_column = 1
-	valunum_column = 2
-	itemid_column = 3
-	list_of_timestamps = []
-	filename = electrolyte + "_final.csv"
-	with open(filename, 'rb') as f:
-		reader = csv.reader(f)
-		for row in reader:
-			if row[icustay_id_column]==str(icustay_id):
-				timestamp_of_reading = pd.Timestamp(row[charttime_column])
-				if timestamp_of_reading.date() == date and (datetime.time(3) < timestamp_of_reading.time() < datetime.time(5)):
-					list_of_timestamps.append(timestamp_of_reading)
-	if len(list_of_timestamps) != 1:
-		return False
-	return list_of_timestamps[0]
-
-
-
-
-#takes in icustay_id of desired patient
-#takes in a desired date to check for anti-arrhythmia drug and lasix administration between 12-3am
-#returns boolean, whether or not the patient received lasix or anti-arrhythmia drugs between 12-3am
-def lasix_aadrug_administration(icustay_id, date):
-	icustay_id_column = 0
-	itemid_column = 1
-	charttime_column = 2
-	valuenum_column = 3
-	with open('complete_drug_table_final.csv', 'rb') as f:
-		reader = csv.reader(f)
-		for row in reader:
-			if row[icustay_id_column] == str(icustay_id):
-				time_of_drug_admin = pd.Timestamp(row[charttime_column])
-				if time_of_drug_admin.date()==date and (datetime.time(0) < time_of_drug_admin.time() < datetime.time(3)):
-					return True 
-	return False
-
-#takes in the desired electrolyte
-#takes in icustay_id of desired patient
-#returns an ordered list of all serium draw timestamps from that patient's icu stay
-def get_date_range(electrolyte, icustay_id):
-	icustay_id_column = 0
-	charttime_column = 1
-	valuenum_column = 2
-	itemid_column = 3
-	list_of_timestamps = []
-	filename = electrolyte + "_final.csv"
-	with open(filename, 'rb') as f:
-		reader = csv.reader(f)
-		for row in reader:
-			if row[icustay_id_column]==str(icustay_id):
-				timestamp_of_reading = pd.Timestamp(row[charttime_column])
-				if len(list_of_timestamps) == 0:
-					list_of_timestamps.append(timestamp_of_reading)
-					set_of_timestamps = Set([timestamp_of_reading])
-				else:
-					if timestamp_of_reading not in set_of_timestamps:
-						list_of_timestamps = binary_search_insertion(list_of_timestamps, timestamp_of_reading)
-						set_of_timestamps.add(timestamp_of_reading)
-	return list_of_timestamps
-
-
-#takes in list of serum draw timestamps 
-#takes in a timestamp to insert into the list of timestamps
-#utilizes binary search to find correct index, inserts timestamp into list of timestamps
-#returns mutated list
-def binary_search_insertion(list_of_timestamps, timestamp_of_reading):
-	lower_bound = 0
-	upper_bound = len(list_of_timestamps)
-	if timestamp_of_reading < list_of_timestamps[lower_bound]:
-		list_of_timestamps.insert(0, timestamp_of_reading)
-		return list_of_timestamps
-	elif timestamp_of_reading > list_of_timestamps[upper_bound]:
-		list_of_timestamps.append(timestamp_of_reading)
-		return list_of_timestamps
-	else:
-		while upper_bound - lower_bound > 1:
-			middle_bound = math.floor((upper_bound+lower_bound)*1.0/2)
-			if timestamp_of_reading > list_of_timestamps[middle_bound]:
-				lower_bound = middle_bound
-			elif timestamp_of_reading < list_of_timestamps[middle_bound]:
-				upper_bound = middle_bound
-		list_of_timestamps.insert(upper_bound, timestamp_of_reading)
-	return list_of_timestamps
 
 #takes in an icustay_id for a particular patient
 #takes in a desired date
