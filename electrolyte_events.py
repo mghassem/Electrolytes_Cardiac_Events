@@ -1,32 +1,14 @@
-
-'''
-for each day and for each hostpital admission:
-	be sure to line up patients' times on the first day
-	find out the last electrolyte reading he had before midnight
-	ignore them if they have a reading between midnight and 4am
-	ignore them if they had lasix between midnight and 4am 
-	over the course of the next day, find out how many events they have
-
-approach:
-	make a dictionary
-	every time you find a new hadm_id, hash it
-	every time you come across a new electrolyte reading, add it to the hadm_id's list
-
-	now for each hadm_id:
-		date = the first date you see
-		find the last reading before midnight
-		if they have a reading between 3am and 5am, ignore
-		otherwise, find the number of events they had the following day 
-'''
-#first save then show
-#copy into variable, then save variable
-
 import pandas as pd 
-import numpy as np 
 import datetime
 import pylab
+import math
 
-Lasix=[1035, 1686, 2244, 2526, 4789, 5416, 12979, 15471]
+
+#list_of_distinct_valid_icustay_ids = [list of icustay_ids that are adult w/first icu admission]
+
+def generate_list_of_lasix_itemids():
+	lasix=[1035, 1686, 2244, 2526, 4789, 5416, 12979, 15471]
+	return lasix
 
 # generates full list of all anti-arrhythmia drug itemids 
 def generate_list_of_drug_itemids():
@@ -80,6 +62,7 @@ def add_letter(drug_name):
 		insertion = letter
 		insertions_list.append(drug_name_copy + letter)
 	return insertions_list
+
 #generates edit-distance-1 transposition
 def switch_letters(drug_name):
 	transpositions_list = []
@@ -131,280 +114,317 @@ def make_spell_check_dictionary():
 
 	return misspelled_dictionary 
 
-#returns the nurse note for that patient as a string
-def get_note_text(hadm_id):
-	with open('nursenotes.csv', 'rb') as f:
+#takes in the icustay_id of a patient
+#takes in the desired date of nurse's note (in pd.Timestamp.date()) format
+#return the nurse's note for the designated patient on the designated day as a string
+def get_nurse_note(icusay_id, date):
+	icustay_id_column = 0
+	charttime_column = 1
+	note_column = 2
+	with open('nurse_note_final.csv', 'rb') as f:
 		reader = csv.reader(f)
 		for row in reader:
-			if row[1]==str(hadm_id):
-				return row[2]
+			if row[icustay_id_column] == str(icustay_id):
+				timestamp_of_event = pd.Timestamp(row[charttime_column])
+				if timestamp_of_event.date() == date:
+					return row[note_column]
 
 
-#searches collection of nurses notes for mention of an anti-arrhythmia drug from 3-5 am on a particular day
-def nurse_note(icustay_id, date):  
-	#example date: date = "2682-10-3"
-	#example of a timestamp: [**2830-3-12**] 10:45AM
-	drug_dictionary = make_spell_check_dictionary()
-	hadm_id = get_hadm_id_from_icustay_id(icustay_id)
-	note_text = get_note_text(hadm_id)
-	words_in_note_text= note_text.split()
-	for word_index in xrange(len(words_in_note_text)):
-		if words_in_note_text[word_index] == '[**' + str(date) + '**] ':
-			check_for_drug_administration = True
-		if check_for_drug_administration==True:
-			if '[**' in words_in_note_text[word_index] and words_in_note_text[word_index] != '[**' + str(date) + '**] ':
-				check_for_drug_administration = False
-				break
-			else: 
-				if drug_dictionary.get(words_in_note_text[word_index]) != None:
-					 return True 
+#takes in the icustay_id of patient
+#takes in the desired date of nurse's note (in pd.Timestamp.date()) format
+#returns a boolean, whether or not nurse's note contains the name of an anti-arrhythmia drug in distance_1_drug_dictionary
+def scan_nurse_note(icustay_id, date):
+	distance_1_drug_dictionary = make_spell_check_dictionary()
+	nurse_note = get_nurse_note(icustay_id, date)
+	nurse_note_split = nurse_note.split()
+	for word in nurse_note_split:
+		if word in distance_1_drug_dictionary:
+			return True 
+
+
+#takes in icustay_id of desired patient
+#takes in a desired date to check for heart rate event
+#returns a boolean, whether or not the patient's heart rate reached or exceeded 150bpm between 12-4am that day
+def heart_rate_event(icustay_id, date): 
+	valid_readings = []
+	icustay_id_column = 0
+	charttime_column = 1
+	valuenum_column = 2
+	itemid_column = 3
+	with open('heart_rate_final.csv', 'rb') as f:
+		reader = csv.reader(f)
+		for row in reader:
+			if row[icustay_id_column] == str(icustay_id):
+				timestamp_of_reading = pd.Timestamp(row[charttime_column])
+				if timestamp_of_reading.date() == date:
+					if datetime.time(0)<timestamp_of_reading.time()<datetime.time(4):
+						valid_readings.append(row[valuenum_column])
+	if len(valid_readings) != 1:
+		return False
+	if valid_readings[0] >= 150:
+		return True 
 	return False 
 
-#takes in an icustay_id, outputs the admission time of that patient
-def get_admission_time(icustay_id): 
-	hadm_id = get_hadm_id_from_icustay_id(icustay_id)
-	subject_id = get_subject_id_from_hadm_id(hadm_id) 
-	with open('admissions.csv', 'rb') as f:
+
+
+
+#takes in icustay_id of desired patient
+#takes in a desired date to check for anti-arrhythmia drug administration
+#returns boolean, whether or not the patient was given anti-arrhythmia drugs between 12-4 am on the desired day
+def anti_arrhythmia_drug_event(icustay_id, date):
+	icustay_id_column = 0
+	itemid_column = 1
+	charttime_column = 2
+	valuenum_column = 3
+	with open('complete_drug_table_final.csv', 'rb') as f:
 		reader = csv.reader(f)
 		for row in reader:
-			if str(subject_id) == row[0]:
-				return row[1]
+			if row[icustay_id_column] == str(icustay_id):
+				if row[itemid_column] in generate_list_of_drug_itemids():
+					timestamp_of_event = pd.Timestamp(row[charttime])
+					if timestamp_of_event.date() == date and (datetime.time(3) < timestamp_of_event.time()< datetime.time(5)):
+						return True 
+	return False
 
-#takes in an icustay_id, outputs the hadm_id associated with it
-def get_hadm_id_from_icustay_id(icustay_id):
-	with open('all_chartevents.csv', 'rb') as f:
+#takes in the desired electrolyte
+#takes in the desired date to check
+#takes in the desired icu_id of a patient
+#returns boolean, whether or not that patient had a serum draw on that day between 12-3 am
+def invalidating_serum_measurement(electrolyte, icustay_id, date):
+	icustay_id_column = 0
+	charttime_column = 1
+	valunum_column = 2
+	itemid_column = 3
+	filename = electrolyte + "_final.csv"
+	with open(filename, 'rb') as f:
 		reader = csv.reader(f)
 		for row in reader:
-			if row[2]==icustay_id:
-				return row[1]
-
-#takes in 
-def blood_pressure_event(hadm_id, measurement_date): #speed this up later
-	admit_time = get_admission_time(hadm_id)
-	admit_time = pd.Timestamp(admit_time)
-	time_since_admission = pd.Timestamp(measurement_date) - admit_time
-	hours_since_admission = time_since_admission.hours()
-	days_since_admission = time_since_admission.days()
-	#time_index is the x index in the 3D matrix that indicates the heart rate at midnight on measurement_date
-	time_index = 24*days_since_admission + hours_since_admission
-
-#this relies on the assumption that all_chartevents.csv and big_matrix.npy have the same subject_id ordering
-#query for big_matrix.npy: "select * from chartevents where ITEMID = " + str(ITEMID) # + " and SUBJECT_ID<200" #and SUBJECT_ID < 15000"
-#by looking at it, both appear to be ordered by increasing subject_id
-	count = 0
-	with open('all_chartevents.csv', 'rb') as f:
-		reader = csv.reader(f)
-		for row in reader:
-			if str(row[0])==subject_id: 
-				y_index = count
-			count += 1
-	for window_hours in xrange(3):
-		if matrix[0][y_index][time_index + window_hours] >= 150:
-			return True
-		return False 
-
-def drug_event(hadm_id, date):
-	with open('drug_events.csv', 'rb') as f:
-		reader = csv.reader(f)
-		for row in reader:
-			if row[1]==str(hadm_id) and pd.Timestamp(row[3]).date() == pd.Timestamp(date).date():
-				try:
-					if int(row[2]) in generate_list_of_drug_itemids():
-						return True
-				except ValueError:
-					print "Error Checking for Drug Event: empty or non-integer column in csv"
-		return False
-
-#takes in an icustay_id and date, returns whether or not a patient received lasix on that date between midnight and 4am. 
-def lasix(icustay_id, date):
-	with open('drug_events.csv', 'rb') as f:
-		reader = csv.reader(f)
-		for row in reader:
-			#if a particular patient received lasix
-			if row[2]==str(icustay_id) and row[3] in lasix:
-				#if the lasix was recieved on the same date between midnight and 4am
-				if  pd.Timestamp(row[4]).date()==date and (datetime.time(0)>pd.Timestamp(row[4]).time()>datetime.time(4)):
+			if row[icustay_id_column]==str(icustay_id):
+				timestamp_of_reading = pd.Timestamp(row[charttime_column])
+				if timestamp_of_reading.date() == date and (datetime.time(0) < timestamp_of_reading.time() < datetime.time(3)):
 					return True
 	return False
 
-#checks if a particular patient had a clinical event between midnight and 4am on a particular day.
-def check_for_event(icustay_id, date):
-	event = False
-	hadm_id = get_hadm_id_from_icustay_id(icustay_id)
-	if blood_pressure_event(hadm_id) and drug_event(icustay_id, date):  
-		event = True
-	elif nurse_note(hadm_id, date):
-		event = True
-	if lasix(icustay_id, date):
-		event = False
-	return event
-
-def get_icustay_id_from_subject_id(subject_id, icu):
-	icustay_ids = []
-	with open('transfers.csv', 'rb') as f:
+#takes in the desired electrolyte
+#takes in the desired date to check
+#takes in the desired icu_id of a patient
+#returns boolean, whether or not that patient received only one serum measurement between 3-5am
+def sole_valid_measurement(electrolyte, icustay_id, date):
+	icustay_id_column = 0
+	charttime_column = 1
+	valunum_column = 2
+	itemid_column = 3
+	list_of_timestamps = []
+	filename = electrolyte + "_final.csv"
+	with open(filename, 'rb') as f:
 		reader = csv.reader(f)
 		for row in reader:
-			if row[4] == icu:
-				icustay_ids.append(row[2])
-	if len(icustay_ids)==0:
-		return None
+			if row[icustay_id_column]==str(icustay_id):
+				timestamp_of_reading = pd.Timestamp(row[charttime_column])
+				if timestamp_of_reading.date() == date and (datetime.time(3) < timestamp_of_reading.time() < datetime.time(5)):
+					list_of_timestamps.append(timestamp_of_reading)
+	if len(list_of_timestamps) != 1:
+		return False
+	return list_of_timestamps[0]
+
+
+
+
+#takes in icustay_id of desired patient
+#takes in a desired date to check for anti-arrhythmia drug and lasix administration between 12-3am
+#returns boolean, whether or not the patient received lasix or anti-arrhythmia drugs between 12-3am
+def lasix_aadrug_administration(icustay_id, date):
+	icustay_id_column = 0
+	itemid_column = 1
+	charttime_column = 2
+	valuenum_column = 3
+	with open('complete_drug_table_final.csv', 'rb') as f:
+		reader = csv.reader(f)
+		for row in reader:
+			if row[icustay_id_column] == str(icustay_id):
+				time_of_drug_admin = pd.Timestamp(row[charttime_column])
+				if time_of_drug_admin.date()==date and (datetime.time(0) < time_of_drug_admin.time() < datetime.time(3)):
+					return True 
+	return False
+
+#takes in the desired electrolyte
+#takes in icustay_id of desired patient
+#returns an ordered list of all serium draw timestamps from that patient's icu stay
+def get_date_range(electrolyte, icustay_id):
+	icustay_id_column = 0
+	charttime_column = 1
+	valuenum_column = 2
+	itemid_column = 3
+	list_of_timestamps = []
+	filename = electrolyte + "_final.csv"
+	with open(filename, 'rb') as f:
+		reader = csv.reader(f)
+		for row in reader:
+			if row[icustay_id_column]==str(icustay_id):
+				timestamp_of_reading = pd.Timestamp(row[charttime_column])
+				if len(list_of_timestamps) == 0:
+					list_of_timestamps.append(timestamp_of_reading)
+					set_of_timestamps = Set([timestamp_of_reading])
+				else:
+					if timestamp_of_reading not in set_of_timestamps:
+						list_of_timestamps = binary_search_insertion(list_of_timestamps, timestamp_of_reading)
+						set_of_timestamps.add(timestamp_of_reading)
+	return list_of_timestamps
+
+
+#takes in list of serum draw timestamps 
+#takes in a timestamp to insert into the list of timestamps
+#utilizes binary search to find correct index, inserts timestamp into list of timestamps
+#returns mutated list
+def binary_search_insertion(list_of_timestamps, timestamp_of_reading):
+	lower_bound = 0
+	upper_bound = len(list_of_timestamps)
+	if timestamp_of_reading < list_of_timestamps[lower_bound]:
+		list_of_timestamps.insert(0, timestamp_of_reading)
+		return list_of_timestamps
+	elif timestamp_of_reading > list_of_timestamps[upper_bound]:
+		list_of_timestamps.append(timestamp_of_reading)
+		return list_of_timestamps
 	else:
-		return icustay_ids 
+		while upper_bound - lower_bound > 1:
+			middle_bound = math.floor((upper_bound+lower_bound)*1.0/2)
+			if timestamp_of_reading > list_of_timestamps[middle_bound]:
+				lower_bound = middle_bound
+			elif timestamp_of_reading < list_of_timestamps[middle_bound]:
+				upper_bound = middle_bound
+		list_of_timestamps.insert(upper_bound, timestamp_of_reading)
+	return list_of_timestamps
 
+#takes in an icustay_id for a particular patient
+#takes in a desired date
+#returns a boolean, whether or not that patient had a clinical event between 12-4am that day
+def event_check(icustay_id, date):
+	return scan_nurse_note(icustay_id, date) or (anti_arrhythmia_drug_event(icustay_id, date) and heart_rate_event(icustay_id, date))
 
-#go through all patients and check if 
-def generate_assorted_data():
-	list_of_dictionary_tuples = []
+#generates a python dictionary with keys in the format (electrolyte, icustay_id, icu, day_number)
+#and values in the format (reading_value, event_boolean)
+#allows for easy histogram plotting
+def generate_histogram_hash_table():
+	histogram_hash_table = {}
 	for electrolyte in ['magnesium', 'potassium']:
-		filename = electrolyte + '.csv'
 		for icu in ['CCU', 'CSRU', 'MICU', 'NICU', 'NWARD', 'SICU', 'TSICU']:
-			events_dictionary = {}
-			patient_counter = 0
-			#look over each patient in electrolyte csv
-			with open(filename, 'rb') as f:
-				reader = csv.reader(f)
-				for row in reader:
-					#get all valid icustay_ids for a patient
-					icustay_ids =  get_icustay_id_from_subject_id(row[0], icu) 
-					if icustay_ids == None:
+			for icustay_id in list_of_distinct_valid_icustay_ids:
+				timestamp_index_counter = -1
+				for timestamp in get_date_range(electrolyte, icustay_id):
+					timestamp_index_counter+=1
+					if lasix_aadrug_administration(icustay_id, timestamp.date()):
 						continue
-					for icustayid in icustay_ids:
-						cut_off = None
-						list_of_results = []
-						#find last reading before 4am each day
-						for row in reader:
-							if row[2]==icustayid:
-								timestamp = pd.Timestamp(row[4])
-								electrolyte_level = row[3]
-								try:
-									if datetime.time(3) > timestamp.time() > datetime.time(5) and (timestamp.date() == time_frame_date):
-										continue
-								except NameError:
-									pass
-								if datetime.time(3) > timestamp.time() > datetime.time(5):   
-									time_frame_date = timestamp.date()
-									event_status = check_for_event(icustay_id, timestamp.date())
-									list_of_results.append(electrolyte_level, event_status)
-						(events_dictionary[icustayid], patient_counter) = list_of_results
-						patient_counter+=1
-			list_of_dictionary_tuples.append(events_dictionary, icu, electrolyte)
+					if invalidating_serum_measurement(electrolyte, icustay_id, timestamp.date()):
+						continue
+					if sole_valid_measurement(electrolyte, icustay_id, timestamp.date())==False:
+						continue
+					if sole_valid_measurement(electrolyte, icustay_id, timestamp.date()) != False:
+						reading = sole_valid_measurement(electrolyte, icustay_id, timestamp.date())
+					event = event_check(icustay_id, date)
+					tuple_to_hash = (electrolyte, icustay_id, icu, timestamp_index_counter)
+					value_to_hash = (reading, event)
+					histogram_hash_table[tuple_to_hash] = value_to_hash
+	return histogram_hash_table
 
-def plot_data():
-	assorted_data = generate_assorted_data()
-	#sort by alphabetically electrolyte, then by icu 
-	sorted_by_icu_and_electrolyte = sorted(list_of_dictionary_tuples.items(),  key=lambda x: (x[2], x[1]))
-	for data_tuple in sorted_by_icu_and_electrolyte:
-		icu = data_tuple[1]
-		electrolyte = data_tuple[2]
-		dictionary = data_tuple[0]
-		plotting_data
-		for reading_tuple in dictionary.values():
-			if reading_tuple[1] == True:
-				plotting_data.append(reading_tuple[0])
-		save_hist(electrolyte, icu, plotting_data)
+#generates and saves histograms for both Magnesium and Potassium
+#plots data unseparated data, data separated by day and by icu
+def generate_histograms():
+	potassium_unfiltered_list = []
+	magnesium_unfiltered_list = []
+	potassium_day_filtered_hash = {}
+	magnesium_day_filtered_hash = {}
+	potassium_icu_filtered_hash = {}
+	magnesium_icu_filtered_hash = {}
+
+	electrolyte_dictionary = generate_histogram_hash_table()
+	for ((electrolyte, icustay_id, icu, day_number), (reading, event)) in electrolyte_dictionary.items():
+		if electrolyte=='magnesium' and event:
+			magnesium_unfiltered_list.append(reading)
+			if magnesium_icu_filtered_hash.get()==None:
+				magnesium_icu_filtered_hash[icu] = [reading]
+			else:
+				magnesium_icu_filtered_hash[icu].append(reading)
+			if magnesium_day_filtered_hash.get()==None:
+				magnesium_day_filtered_hash[day_number] = [reading]
+			else:
+				magnesium_day_filtered_hash.append(reading)
+
+		if electrolyte=='potassium' and event:
+			potassium_unfiltered_list.append(reading)
+			if potassium_icu_filtered_hash.get()==None:
+				potassium_icu_filtered_hash[icu] = [reading]
+			else:
+				potassium_icu_filtered_hash[icu].append(reading)
+			if potassium_day_filtered_hash.get()==None:
+				potassium_day_filtered_hash[day] = [reading]
+			else:
+				potassium_day_filtered_hash[day].append(reading)
+
+	#question: when to call pylab.figure()?
+
+	for (icu, list_of_readings) in magnesium_icu_filtered_hash.items():
+		 title = "Magnesium Levels in " + icu + "vs. Number of Clinical Events"
+		 pylab.title(title)
+		 pylab.xlabel("Electrolyte Levels")
+		 pylab.ylabel("Number of Events")
+		 bins = [0.5,1,1.5,2,2.5,3,3.5,4,4.5,5]
+		 filename = icu + "_magnesium_hist_hist"
+		 pylab.hist(list_of_readings, bins)
+		 pylab.savefig(filename)
+
+	for (icu, list_of_readings) in potassium_icu_filtered_hash.items():
+		title = "Potassium Levels in " + icu + "vs Number of Clinical Events"
+		pylab.title(title)
+		pylab.xlabel("Electrolyte Levels")
+		pylab.ylabel("Number of Events")
+		bins = [0.5,1,1.5,2,2.5,3,3.5,4,4.5,5]
+		filename = icu + "_potassium_icu_hist"
+		pylab.hist(list_of_readings, bins)
+		pylab.savefig(filename)
+
+	for (day_number, list_of_readings) in magnesium_day_filtered_hash.items():
+		title = "Magnesium Levels of Day " + day_number + "in ICU"
+		pylab.title(title)
+		pylab.xlabel("Electrolyte Levels")
+		pylab.ylabel("Number of Events")
+		bins = [0.5,1,1.5,2,2.5,3,3.5,4,4.5,5]
+		filename = "magnesium_day_hist"
+		pylab.hist(list_of_readings, bins)
+		pylab.savefig(filename)
+
+	for (day_number, list_of_readings) in potassium_day_filtered_hash.items():
+		title = "Potassium Levels of Day " + day_number + "in ICU"
+		pylab.title(title)
+		pylab.xlabel("Electrolyte Levels")
+		pylab.ylabel("Number of Events")
+		bins = [0.5,1,1.5,2,2.5,3,3.5,4,4.5,5]
+		filename = "potassium_day_hist"
+		pylab.hist(list_of_readings, bins)
+		pylab.savefig(filename)	
 
 
-def save_hist(electrolyte, icu, events_data):
-	pylab.figure(0)
-	title = electrolyte.capitalize() + 'Levels in ' + icu + ' vs. Number of Clinical Events'
+	list_of_readings = magnesium_unfiltered_list
+	title = "Magnesium Levels vs Number of Events in ICU" 
 	pylab.title(title)
 	pylab.xlabel("Electrolyte Levels")
 	pylab.ylabel("Number of Events")
 	bins = [0.5,1,1.5,2,2.5,3,3.5,4,4.5,5]
-	pylab.hist(events_data,bins)
-	filename = icu + '_' + electrolyte + '_hist'
-	pylab.savefig(filename)
-	# pylab.plot()
-
-print "unpacking matrix"
-matrix = np.load('big_matrix.npy')
-z,y,x = matrix.shape()
-print "Done unpacking matrix"
-
-plot_data()
+	filename = "magnesium_hist"
+	pylab.hist(list_of_readings, bins)
+	pylab.savefig(filename)	
 
 
+	list_of_readings = potassium_unfiltered_list
+	title = "Potassium Levels vs Number of Events in ICU" 
+	pylab.title(title)
+	pylab.xlabel("Electrolyte Levels")
+	pylab.ylabel("Number of Events")
+	bins = [0.5,1,1.5,2,2.5,3,3.5,4,4.5,5]
+	filename = "potassium_hist"
+	pylab.hist(list_of_readings, bins)
+	pylab.savefig(filename)	
 
 
-
-
-	# first_row = True
-	# hadm_id=None
-	# data_dictionary = {}
-	# with open('magnesium.csv', 'rb') as f:
-	# 	reader = csv.reader(f)
-	# 	for row in reader:
-	# 		#ignores the top row
-	# 		if first_row:
-	# 			first_row = False
-	# 			continue
-	# 		#handles first case
-	# 		if hadm_id==None:
-	# 			hadm_id = row[1]
-	# 		#handles hadm_id's not previously seen
-	# 		if data_dictionary.get(hadm_id)==None:
-	# 			data_dictionary[hadm_id] = [(row[3],row[4])]
-	# 		#handles hadm_id's previously seen
-	# 		else:
-	# 			data_dictionary[hadm_id].append((row[3],row[4]))
-
-	# total_events=[]
-	# for hadm_id in data_dictionary.keys():
-	# 	skip_day = False
-	# 	new_day = False
-	# 	time, date = None, None
-	# 	for data_tuple in data_dictionary[hadm_id]:
-	# 		timestamp = pd.Timestamp(data_tuple[1])
-	# 		time = timestamp.time()
-	# 		date = timestamp.date()
-	# 		#handles first reading for a patient
-	# 		if date == None or time == None:
-	# 			current_date = date 
-	# 			last_time = time 
-
-	# 		#identify patients' last reading of the day
-
-	# 		#conditionif it's the current day or before 3am the next day
-	# 		if date == current_date: #or (date = (current_date + pd.Timedelta('1 day')) and time < datetime.time(3)):
-	# 			last_time = time
-	# 		elif datetime.time(0)>time>datetime.time(3):
-	# 			skip_day = True
-	# 			continue
-	# 		elif time>datetime.time(3) and not skip_day:
-	# 			subject_id = get_subject_id_from_hadm_id(hadm_id)
-	# 			admission_time = get_admission_time(subject_id)
-	# 			time_index = (timestamp - admission_time)/pd.Timedelta('1 hour')
-	# 			event_bool = check_for_event(hadm_id, time_index)
-	# 			if event_bool:
-	# 				total_events.append(data_tuple[0])
-	# 		elif time>datetime.time(3) and skip_day: 
-	# 			skip_day = False
-
-
-
-
-
-
-
-
-
-# pylab.figure(0)
-# pylab.title("Magnesium Levels vs. Number of Clinical Events")
-# pylab.xlabel("Magnesium Levels")
-# pylab.ylabel("Number of Events")
-# bins = [0.5,1,1.5,2,2.5,3,3.5,4,4.5,5]
-# pylab.hist(total_events,bins)
-# pylab.plot()
-
-
-
-
-
-
-
-
-
-
-
-
+#HR 211, 220045
+# select c.subject_id, c.icustay_id, c.valuenum, c.charttime from chartevents c, icustay_detail i where i.icustay_id = c.icustay_id and i.first_hosp_stay = 'Y' and i.first_icu_stay = 'Y' and c.itemid in (211, 220045) limit 10; 
 
