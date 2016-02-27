@@ -111,7 +111,7 @@ FROM mimiciii.noteevents
 
 INNER JOIN FILTER_NURSE_NOTE
 ON FILTER_NURSE_NOTE.HADM_ID = noteevents.HADM_ID
-WHERE CATEGORY LIKE '%nursing%'
+WHERE CATEGORY LIKE '%Nursing%'
 );
 
 
