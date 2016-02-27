@@ -1,10 +1,12 @@
 import pandas as pd 
 import datetime
-import pylab
+import pylab #analyze free form intake and medications
 import math
-
-
+#QUESTION: do I have to handle edge case: serum reading recorded twice, same timestamp
+#procedure after this?
+#test suite or not? testing without suite
 #list_of_distinct_valid_icustay_ids = [list of icustay_ids that are adult w/first icu admission]
+#queued: IV analysis, clinical fill-ins, paragraph for Leo
 
 def generate_list_of_lasix_itemids():
 	lasix=[1035, 1686, 2244, 2526, 4789, 5416, 12979, 15471]
@@ -251,6 +253,7 @@ def scan_nurse_note(icustay_id, date):
 	for word in nurse_note_split:
 		if word in distance_1_drug_dictionary:
 			return True 
+	return False
 
 
 #takes in icustay_id of desired patient
@@ -293,7 +296,7 @@ def anti_arrhythmia_drug_event(icustay_id, date):
 			if row[icustay_id_column] == str(icustay_id):
 				if row[itemid_column] in generate_list_of_drug_itemids():
 					timestamp_of_event = pd.Timestamp(row[charttime])
-					if timestamp_of_event.date() == date and (datetime.time(3) < timestamp_of_event.time()< datetime.time(5)):
+					if timestamp_of_event.date() == date and (datetime.time(0) < timestamp_of_event.time()< datetime.time(4)):
 						return True 
 	return False
 
@@ -428,7 +431,7 @@ def generate_histograms():
 	pylab.hist(list_of_readings, bins)
 	pylab.savefig(filename)	
 
-
+print generate_list_of_drug_itemids()
 #HR 211, 220045
 # select c.subject_id, c.icustay_id, c.valuenum, c.charttime from chartevents c, icustay_detail i where i.icustay_id = c.icustay_id and i.first_hosp_stay = 'Y' and i.first_icu_stay = 'Y' and c.itemid in (211, 220045) limit 10; 
 
