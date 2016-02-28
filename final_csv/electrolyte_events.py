@@ -32,14 +32,14 @@ def generate_list_of_drug_names():
 #get a list of all the valid icustay ids (i.e. adult, first icu_stay)
 def list_of_distinct_valid_icustay_ids():
 	first_row = True
-	icustay_id_set = set()
+	icustay_id_set = []
 	with open('valid_icustay_ids.csv', 'rb') as f:
 		reader = csv.reader(f)
 		for row in reader:
 			if first_row:
 				first_row = False
 			else:
-				icustay_id_set.add(row[0])
+				icustay_id_set.append(row[0])
 	return icustay_id_set
 
 #generates edit-distance-1 omission permutations
@@ -98,35 +98,36 @@ def switch_letters(drug_name):
 #generate dictionary of words and words 1-edit-distance away
 def make_spell_check_dictionary():
 	alphabet = 'abcdefghijklmnopqrstuvwxyz'
-	list_of_drugs = generate_list_of_drug_names()
-	misspelled_dictionary = {}
+	# list_of_drugs = generate_list_of_drug_names()
+	list_of_drugs = ['hi']
+	misspelled_dictionary = set()
 
 	#insert all correctly spelled words into dictionary
 	for drug in list_of_drugs:
-		misspelled_dictionary[drug.lower()] = True
-		misspelled_dictionary[drug.upper()] = True
-		misspelled_dictionary[drug.capitalize()] = True 
+		misspelled_dictionary.add(drug.lower()) 
+		misspelled_dictionary.add(drug.upper()) 
+		misspelled_dictionary.add(drug.capitalize()) 
 
 	#insert all edit-distance-1 omissions into dictionary
 	for drug in list_of_drugs:
 		for word in omit_letter(drug):
-			misspelled_dictionary[word.lower()] = True 
-			misspelled_dictionary[word.upper()] = True 
-			misspelled_dictionary[word.capitalize()] = True 
+			misspelled_dictionary.add(word.lower()) 
+			misspelled_dictionary.add(word.upper()) 
+			misspelled_dictionary.add(word.capitalize()) 
 
 	#insert all edit-distance-1 insertions into dictionary
 	for drug in list_of_drugs:
 		for word in add_letter(drug):
-			misspelled_dictionary[word.lower()] = True 
-			misspelled_dictionary[word.upper()] = True 
-			misspelled_dictionary[word.capitalize()] = True 
+			misspelled_dictionary.add(word.lower())
+			misspelled_dictionary.add(word.upper())
+			misspelled_dictionary.add(word.capitalize())  
 
 	#insert all distance-1 transpositions (e.g.  hello --> hlelo, NOT hello --> ohell)
 	for drug in list_of_drugs:
 		for word in switch_letters(drug):
-			misspelled_dictionary[word.lower()] = True 
-			misspelled_dictionary[word.upper()] = True 
-			misspelled_dictionary[word.upper()] = True 
+			misspelled_dictionary.add(word.lower()) 
+			misspelled_dictionary.add(word.upper()) 
+			misspelled_dictionary.add(word.capitalize())
 
 	return misspelled_dictionary 
 
@@ -445,5 +446,4 @@ def generate_histograms():
 	pylab.hist(list_of_readings, bins)
 	pylab.savefig(filename)	
 
-print list_of_distinct_valid_icustay_ids()
-
+print type(list_of_distinct_valid_icustay_ids())
