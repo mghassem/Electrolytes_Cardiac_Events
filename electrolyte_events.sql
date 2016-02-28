@@ -23,14 +23,15 @@ CREATE TABLE MAGNESIUM_FINAL AS
 (
 SELECT DISTINCT 
 	chartevents.ICUSTAY_ID,
-	chartevents.ITEMID, 
 	chartevents.CHARTTIME,
-	chartevents.VALUENUM
+	chartevents.VALUENUM,
+	chartevents.ITEMID
 FROM
 	mimiciii.chartevents
 INNER JOIN FILTER 
 ON FILTER.ICUSTAY_ID = chartevents.ICUSTAY_ID
 WHERE chartevents.VALUENUM IS NOT NULL
+AND chartevents.ITEMID IN ('1532', '821', '220635')
 );
 
 
@@ -38,14 +39,15 @@ CREATE TABLE POTASSIUM_FINAL AS
 (
 SELECT DISTINCT 
 	chartevents.ICUSTAY_ID,
-	chartevents.ITEMID,
 	chartevents.CHARTTIME,
-	chartevents.VALUENUM
+	chartevents.VALUENUM,
+	chartevents.ITEMID
 FROM
 	mimiciii.chartevents
 INNER JOIN FILTER
 ON FILTER.ICUSTAY_ID = chartevents.ICUSTAY_ID
 WHERE chartevents.VALUENUM IS NOT NULL
+AND chartevents.itemid IN ('829', '1535', '227442', '3792', '44711', '46223', '41956', '42728')
 );
 
 CREATE TABLE FILTER_NURSE_NOTE AS
