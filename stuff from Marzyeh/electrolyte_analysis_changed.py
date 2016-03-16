@@ -402,8 +402,8 @@ def data_per_icu():
 		subplot.set_yticklabels(['{}%'.format(int(x)) for x in vals])	
 
 
-for day in xrange(3):  
-	data_per_icu()  
+# for day in xrange(3):  
+# 	data_per_icu()  
 
 
 #####
@@ -425,7 +425,7 @@ def plot_by_icu():
 			measurements.ix[fill_in, 'which_day'] = (day+1) 
 
 		measurements = measurements.sort_values('charttime')
-		grouped = measurements.grouped('icustay_id')
+		grouped = measurements.groupby('icustay_id')
 		t = grouped.median()
 		t['icustay_id'] = t.index
 		t = t.rename(columns = {'valuenum':'median_lab'})  
@@ -433,7 +433,7 @@ def plot_by_icu():
 		grouped['icustay_id'] = grouped.index
 		grouped = grouped.merge(t[['icustay_id', 'median_lab']])
 
-		plot_data = grouped[['which_day', 'median_lab']].grouped('which_day').agg(['mean', 'std', 'count'])
+		plot_data = grouped[['which_day', 'median_lab']].groupby('which_day').agg(['mean', 'std', 'count'])
 
 		# Error bar plt the underlying values (mu,sigma) for each grouping of which_day in the x-axis
 		fig = plt.figure()
@@ -443,12 +443,12 @@ def plot_by_icu():
 		subplot.set_xlabel('Days')
 		subplot.set_ylabel('Lab Value')
 
-		if lab==k_meas:
+		if lab_counter==1:
 			subplot.set_title('Distribution of potassium values on the first ICU stay')
 			subplot.set_ylim(2, 6)
 			top = 6
 
-		elif lab==mg_meas:
+		elif lab_counter==2:
 			subplot.set_title('Distribution of magnesium values on the first ICU stay')
 			subplot.set_ylim(0, 4)
 			top = 4
@@ -462,6 +462,7 @@ def plot_by_icu():
 			plt.savefig('K_Readings_Figure.png')
 		elif lab_counter==2:
 			plt.savefit('MG_Readings_Figure.png')
+plot_by_icu()
 
 ####
 ## Figure 3,4,5: Histogram of values on on day 1, 2, 3 in the values over days across all ICUs
@@ -498,7 +499,7 @@ def plot_by_day():
 				file_name = 'MG_hist_{'+str(day)+'}.png'
 				plt.savefig(file_name)
 
-plot_by_day()
+# plot_by_day()
 ####
 ## Figure 6: Histogram of values on day 1 stratified by ICU
 ####
