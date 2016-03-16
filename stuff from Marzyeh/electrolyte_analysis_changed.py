@@ -4,7 +4,7 @@ import numpy as np
 from scipy.stats import norm, mstats
 import pandas as pd
 import matplotlib
-#matplotlib.use('Qt4Agg')   question: can this be deleted?
+#matplotlib.use('Qt4Agg')   
 import matplotlib.pyplot as plt
 import seaborn as sns
 import itertools as it
@@ -283,12 +283,6 @@ def data_per_icu():
 		subplot.set_yticklabels(['{}%'.format(int(x)) for x in vals])
 
 
-
-
-
-
-
-
 	#####
 	#####
 	#####
@@ -412,119 +406,99 @@ for day in xrange(3):
 	data_per_icu()  
 
 
-
-
-
-
-
-
 #####
 ## Figure 2: Trend s in the values over days across all ICUs
 #####
-lab = k_meas    #fix this question
-num_days = 5
+def plot_by_icu():
+	lab_counter = 0
+	for lab in [k_meas, mg_meas]:
+		lab_counter+=1
+		num_days = 5
+		measurements = measures[lab]
+		electrolyte_start_day = measurements['intime'].apply(lambda x: x.replace(hour=0, minute=0, second=0, microsecond=0))
 
-ks = measures[lab]
-k_start_day = ks['intime'].apply(lambda x: x.replace(hour=0, minute=0, second=0, microsecond=0))
+		# add in the per day thing
+		for day in range(num_days):
+			start_win = electrolyte_start_day + pd.Timedelta(days=(day+1))
+			end_win = start_win + pd.Timedelta(hours=5)
+			fill_in = (measurements['charttime'] >= start_win) & (measurements['charttime'] <= end_win)
+			measurements.ix[fill_in, 'which_day'] = (day+1) 
 
-# add in the per day thing
-for day in range(num_days):
-	start_win = k_start_day + pd.Timedelta(days=(day+1))
-	end_win = start_win + pd.Timedelta(hours=5)
-	fill_in = (ks['charttime'] >= start_win) & (ks['charttime'] <= end_win)
-	ks.ix[fill_in, 'which_day'] = (day+1) 
+		measurements = measurements.sort_values('charttime')
+		grouped = measurements.grouped('icustay_id')
+		t = grouped.median()
+		t['icustay_id'] = t.index
+		t = t.rename(columns = {'valuenum':'median_lab'})  
+		grouped = grouped.last()
+		grouped['icustay_id'] = grouped.index
+		grouped = grouped.merge(t[['icustay_id', 'median_lab']])
 
-ks = ks.sort_values('charttime')
-gb = ks.groupby('icustay_id')
-t = gb.median()
-t['icustay_id'] = t.index
-t = t.rename(columns = {'valuenum':'median_lab'})
-gb = gb.last()
-gb['icustay_id'] = gb.index
-gb = gb.merge(t[['icustay_id', 'median_lab']])
+		plot_data = grouped[['which_day', 'median_lab']].grouped('which_day').agg(['mean', 'std', 'count'])
 
-plot_data = gb[['which_day', 'median_lab']].groupby('which_day').agg(['mean', 'std', 'count'])
+		# Error bar plt the underlying values (mu,sigma) for each grouping of which_day in the x-axis
+		fig = plt.figure()
+		subplot = fig.add_subplot(111)
+		grouped[['which_day', 'median_lab']].boxplot(by='which_day', ax=subplot)
 
-# Error bar plt the underlying values (mu,sigma) for each grouping of which_day in the x-axis
-fig = plt.figure()
-ax1 = fig.add_subplot(111)
-gb[['which_day', 'median_lab']].boxplot(by='which_day', ax=ax1)
+		subplot.set_xlabel('Days')
+		subplot.set_ylabel('Lab Value')
 
-ax1.set_xlabel('Days')
-ax1.set_ylabel('Lab Value')
+		if lab==k_meas:
+			subplot.set_title('Distribution of potassium values on the first ICU stay')
+			subplot.set_ylim(2, 6)
+			top = 6
 
-# IF LOOKING AT K
-ax1.set_title('Distribution of potassium values on the first ICU stay')
-ax1.set_ylim(2, 6)
-top = 6
+		elif lab==mg_meas:
+			subplot.set_title('Distribution of magnesium values on the first ICU stay')
+			subplot.set_ylim(0, 4)
+			top = 4
 
-# IF LOOKING AT Mg
-ax1.set_title('Distribution of magnesium values on the first ICU stay')
-ax1.set_ylim(0, 4)
-top = 4
-
-pos = np.arange(num_days) + 1
-upperLabels = ['{0} Readings'.format(e) for e in plot_data['median_lab']['count'].values]
-for tick, label in zip(range(num_days), ax1.get_xticklabels()):
-	k = tick % 2
-	ax1.text(pos[tick], top - (top*0.05), upperLabels[tick], horizontalalignment='center', size='x-small')
-
-
-plt.savefig('MG_Readings_Figure.png')
-
+		pos = np.arange(num_days) + 1
+		upperLabels = ['{0} Readings'.format(e) for e in plot_data['median_lab']['count'].values]
+		for tick, label in zip(range(num_days), subplot.get_xticklabels()):
+			k = tick % 2
+			subplot.text(pos[tick], top - (top*0.05), upperLabels[tick], horizontalalignment='center', size='x-small')
+		if lab_counter==1:
+			plt.savefig('K_Readings_Figure.png')
+		elif lab_counter==2:
+			plt.savefit('MG_Readings_Figure.png')
 
 ####
 ## Figure 3,4,5: Histogram of values on on day 1, 2, 3 in the values over days across all ICUs
 #####
-lab = k_meas
-num_days = 3
+def plot_by_day():
+	lab_counter=0
+	for lab in [k_meas, mg_meas]:
+		lab_counter+=1
+		num_days = 3
+		measurements = measures[lab]
+		electrolyte_start_day = measurements['intime'].apply(lambda x: x.replace(hour=0, minute=0, second=0, microsecond=0))
 
-ks = measures[lab]
-k_start_day = ks['intime'].apply(lambda x: x.replace(hour=0, minute=0, second=0, microsecond=0))
+		# add in the per day thing
+		for day in range(num_days):
+			start_win = electrolyte_start_day + pd.Timedelta(days=(day+1))
+			end_win = start_win + pd.Timedelta(hours=5)
 
-# add in the per day thing
-for day in range(num_days):
-	start_win = k_start_day + pd.Timedelta(days=(day+1))
-	end_win = start_win + pd.Timedelta(hours=5)
+			this_k = measurements[(measurements['charttime'] >= start_win) & (measurements['charttime'] <= end_win)]
+			this_k = this_k.groupby('icustay_id')
+			this_k = this_k.median()
 
-	this_k = ks[(ks['charttime'] >= start_win) & (ks['charttime'] <= end_win)]
-	this_k = this_k.groupby('icustay_id')
-	this_k = this_k.median()
+			fig = plt.figure()
+			subplot = fig.add_subplot(111)
+			this_k['valuenum'].hist() #(kind='bar', ax=subplot)
+			subplot.set_xlabel('Lab Value')
+			subplot.set_ylabel('Count')  
 
-	fig = plt.figure()
-	ax1 = fig.add_subplot(111)
-	this_k['valuenum'].hist() #(kind='bar', ax=ax1)
-	ax1.set_xlabel('Lab Value')
-	ax1.set_ylabel('Count')
+			if lab_counter == 1:
+				subplot.set_title('Distribution of potassium values on Day {0} of the ICU stay'.format(day))
+				file_name = 'K_hist_{'+str(day)+'}.png'
+				plt.savefig(file_name)
+			elif lab_counter==2:
+				subplot.set_title('Distribution of magnesium values on Day {0} of the ICU stay'.format(day))
+				file_name = 'MG_hist_{'+str(day)+'}.png'
+				plt.savefig(file_name)
 
-	ax1.set_title('Distribution of potassium values on Day {0} of the ICU stay'.format(day))
-	plt.savefig('K_hist_{0}.png'.format(day))
-
-lab = mg_meas
-num_days = 3
-
-ks = measures[lab]
-k_start_day = ks['intime'].apply(lambda x: x.replace(hour=0, minute=0, second=0, microsecond=0))
-
-# add in the per day thing
-for day in range(num_days):
-	start_win = k_start_day + pd.Timedelta(days=(day+1))
-	end_win = start_win + pd.Timedelta(hours=5)
-
-	this_k = ks[(ks['charttime'] >= start_win) & (ks['charttime'] <= end_win)]
-	this_k = this_k.groupby('icustay_id')
-	this_k = this_k.median()
-
-	fig = plt.figure()
-	ax1 = fig.add_subplot(111)
-	this_k['valuenum'].hist() #(kind='bar', ax=ax1)
-	ax1.set_xlabel('Lab Value')
-	ax1.set_ylabel('Count')
-
-	ax1.set_title('Distribution of potassium values on Day {0} of the ICU stay'.format(day))
-	plt.savefig('MG_hist_{0}.png'.format(day))	
-
-
+plot_by_day()
 ####
 ## Figure 6: Histogram of values on day 1 stratified by ICU
 ####
