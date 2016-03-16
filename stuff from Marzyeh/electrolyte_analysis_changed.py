@@ -461,7 +461,7 @@ def plot_by_icu():
 		if lab_counter==1:
 			plt.savefig('K_Readings_Figure.png')
 		elif lab_counter==2:
-			plt.savefit('MG_Readings_Figure.png')
+			plt.savefig('MG_Readings_Figure.png')
 plot_by_icu()
 
 ####
